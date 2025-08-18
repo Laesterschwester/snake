@@ -1,80 +1,104 @@
 import config
 import pygame
-import borderCol
+
+
+class SnakeSegment:
+    def __init__(self, position, color, is_active):
+        self.position = position
+        self.color = color
+        self.is_active = is_active
+
+    def draw(self, display):
+        tile_width = config.TILE_WIDTH
+        scalar = tile_width + config.TILE_SPACING
+        color = self.color
+        if not self.is_active:
+            color = (154, 202, 0)
+        pygame.draw.rect(
+            display,
+            color,
+            (
+                self.position[0] * scalar,
+                self.position[1] * scalar,
+                tile_width,
+                tile_width,
+            ),
+        )
+
 
 class Snake:
-    foodInStomachDuration = []
-    longBoi = []
-    head_position = [0, 0]
-    butt_position = head_position
-    speed = [0, 1]
-    length = 1
-    foodInStomach = []
-    lastPosition = []
+    def __init__(self):
+        color = (124, 252, 0)
+        self.color = color
+        self.long_boi = [SnakeSegment([0, 0], color, True)]
+        self.direction = [0, 1]
+        self.prev_direction = self.direction
 
-    def check_Bounds(self):
-        if self.head_position[0]>config.WINDOW_WIDTH or self.head_position[0]<0 or self.head_position[1]>config.WINDOW_HEIGHT or self.head_position[1]<0:
-            pygame.quit()
+    def move(self, wall_collision):
+        self.prev_direction = self.direction
+        head = self.long_boi[0]
+        head_position = head.position
+        x_next = head_position[0] + self.direction[0]
+        y_next = head_position[1] + self.direction[1]
 
-    def updateStomach(self):
-        i = 0
-        for duration in self.foodInStomachDuration:
-            self.foodInStomachDuration[i] += 1
+        wrap_around = False
+        number_of_tiles_height = config.NUMBER_OF_TILES_HEIGHT
+        number_of_tiles_width = config.NUMBER_OF_TILES_WIDTH
 
-            if duration-1 >= len(self.longBoi):
-                self.longBoi.append(self.foodInStomach[0])
-                self.foodInStomach.pop(0)
-                self.foodInStomachDuration.pop(0)
-                self.length += 1
-            i += 1
+        if not (
+            0 <= x_next < number_of_tiles_width and 0 <= y_next < number_of_tiles_height
+        ):
+            if wall_collision:
+                # TODO: fail message instead of quitting
+                # exit()
+                pass
+            wrap_around = True
 
-    def eat(self, food):
-        index = 0
-        for i in food.foodBasket:
-            if self.head_position[0] == i[0] and self.head_position[1] == i[1]:
-                food.foodOnScreen -= 1
-                del food.foodBasket[index]
-                #wartet so lange, bis es das Ende von longBoi erreicht hat und dann append
-                self.foodInStomach.append(i)
+        for i in range(len(self.long_boi) - 1, 0, -1):
+            segment = self.long_boi[i]
+            if segment.is_active:
+                self.long_boi[i].position = self.long_boi[i - 1].position
+            else:
+                if segment.position == self.long_boi[i - 1].position:
+                    self.long_boi[i].is_active = True
 
-                self.foodInStomachDuration.append(0)
-            index += 1
+        head.position = [x_next, y_next]
+        head_position = head.position
+        if wrap_around:
+            if head_position[0] <= -1:
+                head.position = [number_of_tiles_width - 1, y_next]
+            if head_position[1] <= -1:
+                head.position = [x_next, number_of_tiles_height - 1]
+            if head_position[0] >= number_of_tiles_width:
+                head.position = [0, y_next]
+            if head_position[1] >= number_of_tiles_height:
+                head.position = [x_next, 0]
 
-    def drawStomach(self, display):
-        "hier prozentualen offset einbauen um Bauch dick zu machen"
-        for i in self.foodInStomach:
-            pygame.draw.rect(display, self.color, (i[0]-3, i[1]-3, config.TILE_WIDTH*1.5, config.TILE_WIDTH*1.5))
+        # self collision
+        for body_segment in self.long_boi[1:]:
+            if head_position == body_segment.position:
+                if body_segment.is_active:
+                    exit()
 
-    def __init__(self, display):
-        self.color = (124, 252, 0)
-        self.draw_snake(display)
+    def draw(self, display):
+        for boi_bits in self.long_boi:
+            boi_bits.draw(display)
 
-    def mov_body(self):
-        self.longBoi.insert(0, self.lastPosition)
-        del self.longBoi[-1]
+    def eat(self, foods):
+        for food in foods:
+            if self.long_boi[0].position == food.position:
+                foods.remove(food)
+                self.long_boi.append(SnakeSegment(food.position, self.color, False))
+                break
 
-    def draw_snake(self, display):
-        pygame.draw.rect(display, self.color, (self.head_position[0], self.head_position[1], config.TILE_WIDTH, config.TILE_WIDTH))
-        for snek in self.longBoi:
-            pygame.draw.rect(display, self.color, (snek[0], snek[1], config.TILE_WIDTH, config.TILE_WIDTH))
-
-    def direction(self, keyEvent):
-        if keyEvent == "up" and (not self.speed[1] == 1):
-            self.speed = [0, -1]
-        if keyEvent == "left" and (not self.speed[0] == 1):
-            self.speed = [-1, 0]
-        if keyEvent == "down" and (not self.speed[1] == -1):
-            self.speed = [0, 1]
-        if keyEvent == "right" and (not self.speed[0] == -1):
-            self.speed = [1, 0]
-
-    def collisionCheck(self):
-        for body in self.longBoi:
-            if self.head_position == body:
-                pygame.quit()
-
-    def move(self):
-        self.lastPosition = self.head_position.copy()
-        borderCol.borderCol(self.head_position, self.speed)
-        self.head_position[0] += self.speed[0] * (config.TILE_WIDTH + config.TILE_SPACING)
-        self.head_position[1] += self.speed[1] * (config.TILE_WIDTH + config.TILE_SPACING)
+    def handle_input(self, events):
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT and not self.prev_direction == [1, 0]:
+                    self.direction = [-1, 0]
+                if event.key == pygame.K_RIGHT and not self.prev_direction == [-1, 0]:
+                    self.direction = [1, 0]
+                if event.key == pygame.K_DOWN and not self.prev_direction == [0, -1]:
+                    self.direction = [0, 1]
+                if event.key == pygame.K_UP and not self.prev_direction == [0, 1]:
+                    self.direction = [0, -1]
